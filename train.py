@@ -20,8 +20,15 @@ def set_seed(seed):
     np.random.seed(seed)
     
 def training(model, train_dl, mse_loss):
+    
+    for param in model.model.parameters():
+        param.requires_grad = True
+    for param in model.scoring_head.parameters():
+        param.requires_grad = True
+        
     model.train()
     total_loss = 0
+    alpha = 0.75 # a weighting factor between the loss
     for batch in tqdm(train_dl):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
@@ -35,11 +42,14 @@ def training(model, train_dl, mse_loss):
         regression_loss = mse_loss(outputs["scores"], scores)
         generation_loss = outputs["loss"] # text generation loss
 
-        total_batch_loss = generation_loss + regression_loss
+        total_batch_loss = generation_loss + alpha * regression_loss
         total_batch_loss.backward()
         optimizer.step()
 
         total_loss += total_batch_loss.item()
+        
+    avg_loss = total_loss / len(train_dl)
+    print(f"Training Loss: {avg_loss:.4f}")
 
 def validation(model, tokenizer, val_dl):
     model.eval()
@@ -154,9 +164,5 @@ if __name__ == '__main__':
     print(f'Acc test: {score_test_eval['accuracy']}')
     print(f"BertScore: {feedback_test_eval['bert']}, BLEU score: {feedback_test_eval['bleu']}, ROUGE-L: {feedback_test_eval['rougel']}, METEOR: {feedback_test_eval['meteor']}")
 
-
     # Save model
     torch.save(model.state_dict(), f"{output_dir}/{model_args}-{batch_size}-{seed}-{features}-{learning_rate}.pth")
-    
-    
-    
